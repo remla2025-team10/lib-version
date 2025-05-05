@@ -1,4 +1,4 @@
-name: Release lib-ml
+name: Release lib-version
 
 on:
   push:
@@ -67,7 +67,9 @@ jobs:
         run: |
           IFS='.' read -r major minor patch <<< "${{ env.version }}"
           PATCH=$((patch + 1))
+          echo "Release version: v${major}.${minor}.${patch}"
           NEW_VERSION="v${major}.${minor}.${PATCH}-pre"
+          echo "New version on main: $NEW_VERSION"
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
