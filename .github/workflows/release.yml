@@ -74,4 +74,4 @@ jobs:
           git add src/lib_version/VERSION
           git commit -m "ci: bump version to $NEW_VERSION"
           git tag "$NEW_VERSION"
-          git push origin "$NEW_VERSION"
+          git push origin main "$NEW_VERSION"
