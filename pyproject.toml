@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools >= 77.0.3"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lib-version"
+dynamic = ["version"]
+authors = [
+  { name="REMLA 2025 group 10"},
+]
+description = "A version aware library"
+readme = "README.md"
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3",
+]
+license-files = ["LICEN[CS]E*"]
+
+[project.urls]
+Homepage = "https://github.com/remla2025-team10/lib-version"
+Issues = "https://github.com/remla2025-team10/lib-version/issues"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

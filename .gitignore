@@ -1,1 +1,4 @@
 .venv/
+dist/
+src/lib_version.egg-info/
+__pycache__/

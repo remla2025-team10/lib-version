@@ -1,0 +1,5 @@
+build==1.2.2.post1
+importlib_resources==6.5.2
+packaging==25.0
+pyproject_hooks==1.2.0
+tomli==2.2.1
