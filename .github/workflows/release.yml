@@ -106,6 +106,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git checkout -b main
+          git pull origin main
 
           # Bump patch
           IFS='.' read -r major minor patch <<< "${{ needs.versioning.outputs.version }}"
@@ -114,12 +115,9 @@ jobs:
           
           # Determine new version
           NEW_VERSION="${major}.${minor}.${PATCH}-pre"
-
           
           # Change version file
           echo $NEW_VERSION > $VERSION_FILE
-
-          git pull
 
           # Commit change
           git add $VERSION_FILE
