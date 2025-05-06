@@ -38,6 +38,36 @@ jobs:
           fi
 
           echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+
+      # Must be run before the release action because 
+      - name: Create Commit for stable version
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b main
+
+          # Remove the pushed tags
+          if [[ "$GITHUB_REF" == "refs/tags/release" ]]; then
+            git tag -d release
+            git push origin :release
+          elif [[ "$GITHUB_REF" == "refs/tags/v*" ]]; then
+            git tag -d v$NEW_VERSION
+            git push origin :v$NEW_VERSION
+          fi
+          
+          # Change version file
+          echo $NEW_VERSION > $VERSION_FILE
+
+          # Commit the change
+          # Commit change
+          git add $VERSION_FILE
+          git commit -m "New stable version: v$NEW_VERSION"
+          git tag v$NEW_VERSION
+          
+          # Push commit and tag to remote
+          git push origin HEAD:main
+          git push origin v$NEW_VERSION
+
   # Exchangeable, this is specific to lib-version
   build-and-release:
     needs: versioning
@@ -74,57 +104,33 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   
-  # tag-and-bump:
-  #   needs: [versioning, build-and-release]
-  #   runs-on: ubuntu-latest
-  #   env:
-  #     VERSION_FILE: "src/lib_version/VERSION"
-  #   steps:
-  #     - name: Checkout code
-  #       uses: actions/checkout@v4
-      
-  #     - name: Commit New Version with Stable Tag
-  #       run: |
-  #         git config user.name "github-actions[bot]"
-  #         git config user.email "github-actions[bot]@users.noreply.github.com"
-  #         git checkout -b main
-
-  #         # Change version file
-  #         echo ${{ needs.versioning.outputs.version }} > $VERSION_FILE
-
-  #         # Remove releas tag if necessary
-  #         if [[ "$GITHUB_REF" == "refs/tags/release" ]]; then
-  #           git tag -d release
-  #           git push origin :release
-  #         fi
-
-  #         # Commit change
-  #         git add $VERSION_FILE
-  #         git commit -m "New stable version: ${{ needs.versioning.outputs.version }}"
-  #         git tag v${{ needs.versioning.outputs.version }}
-          
-  #         # Push commit and tag to remote
-  #         git push origin HEAD:main
-  #         git push origin v${{ needs.versioning.outputs.version }}
+  tag-and-bump:
+    needs: [versioning, build-and-release]
+    runs-on: ubuntu-latest
+    env:
+      VERSION_FILE: "src/lib_version/VERSION"
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
         
-  #     - name: Bump to New Pre-Release
-  #       run: |
-  #         # Bump patch
-  #         IFS='.' read -r major minor patch <<< "${{ needs.versioning.outputs.version }}"
-  #         PATCH=$((patch + 1))
-  #         echo $PATCH
+      - name: Bump to New Pre-Release
+        run: |
+          # Bump patch
+          IFS='.' read -r major minor patch <<< "${{ needs.versioning.outputs.version }}"
+          PATCH=$((patch + 1))
+          echo $PATCH
           
-  #         # Determine new version
-  #         NEW_VERSION="${major}.${minor}.${PATCH}-pre"
+          # Determine new version
+          NEW_VERSION="${major}.${minor}.${PATCH}-pre"
           
-  #         # Change version file
-  #         echo $NEW_VERSION > $VERSION_FILE
+          # Change version file
+          echo $NEW_VERSION > $VERSION_FILE
 
-  #         # Commit change
-  #         git add $VERSION_FILE
-  #         git commit -m "New pre-release version: v$NEW_VERSION"
-  #         git tag v$NEW_VERSION
+          # Commit change
+          git add $VERSION_FILE
+          git commit -m "New pre-release version: v$NEW_VERSION"
+          git tag v$NEW_VERSION
 
-  #         # Push commit and tag
-  #         git push origin HEAD:main
-  #         git push origin v$NEW_VERSION
+          # Push commit and tag
+          git push origin HEAD:main
+          git push origin v$NEW_VERSION
