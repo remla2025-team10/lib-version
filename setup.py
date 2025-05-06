@@ -1,6 +1,5 @@
-from setuptools import setup, find_packages
+from setuptools import setup
 import os
-import re   
 
 # Read instead of import to avoid racing conditions
 def read_version():
