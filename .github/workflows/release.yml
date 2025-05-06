@@ -51,22 +51,22 @@ jobs:
             git tag -d release
             git push origin :release
           elif [[ "$GITHUB_REF" == "refs/tags/v*" ]]; then
-            git tag -d v$NEW_VERSION
-            git push origin :v$NEW_VERSION
+            git tag -d v${{ steps.set.outputs.version }}
+            git push origin :v${{ steps.set.outputs.version }}
           fi
           
           # Change version file
-          echo $NEW_VERSION > $VERSION_FILE
+          echo ${{ steps.set.outputs.version }} > $VERSION_FILE
 
           # Commit the change
           # Commit change
           git add $VERSION_FILE
-          git commit -m "New stable version: v$NEW_VERSION"
-          git tag v$NEW_VERSION
+          git commit -m "New stable version: v${{ steps.set.outputs.version }}"
+          git tag v${{ steps.set.outputs.version }}
           
           # Push commit and tag to remote
           git push origin HEAD:main
-          git push origin v$NEW_VERSION
+          git push origin v${{ steps.set.outputs.version }}
 
   # Exchangeable, this is specific to lib-version
   build-and-release:
@@ -103,6 +103,29 @@ jobs:
             dist/*.whl
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Bump to New Pre-Release
+        run: |
+          # Bump patch
+          IFS='.' read -r major minor patch <<< "${{ needs.versioning.outputs.version }}"
+          PATCH=$((patch + 1))
+          echo $PATCH
+          
+          # Determine new version
+          NEW_VERSION="${major}.${minor}.${PATCH}-pre"
+
+          
+          # Change version file
+          echo $NEW_VERSION > $VERSION_FILE
+
+          # Commit change
+          git add $VERSION_FILE
+          git commit -m "New pre-release version: v$NEW_VERSION"
+          git tag v$NEW_VERSION
+
+          # Push commit and tag
+          git push origin HEAD:main
+          git push origin v$NEW_VERSION
   
   tag-and-bump:
     needs: [versioning, build-and-release]
@@ -118,7 +141,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git checkout -b main
-          
+
           # Bump patch
           IFS='.' read -r major minor patch <<< "${{ needs.versioning.outputs.version }}"
           PATCH=$((patch + 1))
@@ -126,6 +149,7 @@ jobs:
           
           # Determine new version
           NEW_VERSION="${major}.${minor}.${PATCH}-pre"
+
           
           # Change version file
           echo $NEW_VERSION > $VERSION_FILE
