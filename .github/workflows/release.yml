@@ -1,77 +1,128 @@
-name: Release lib-ml
+name: Release Workflow
 
 on:
   push:
-    branches:
-      - main
     tags:
       - 'v[0-9]+.[0-9]+.[0-9]+'
       - 'release'
-    paths:
-      - 'VERSION'
-      - 'pyproject.toml'
-      - 'src/**'
-      - '.github/workflows/release.yml'
 
 jobs:
-  release:
+  versioning: # Determine the new version
     runs-on: ubuntu-latest
+    env:
+      VERSION_FILE: "src/lib_version/VERSION"
+    outputs:
+      version: ${{ steps.set.outputs.version }}
     steps:
-      - name: Checkout repo
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Python Setup
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.10"
-
-      - name: Install build tools
-        run: |
-          python -m pip install --upgrade pip build
-
       - name: Determine version
-        id: versioning
+        id: set
         run: |
-          VERSION_FILE="src/lib_version/VERSION"
           CURRENT_VERSION=$(cat $VERSION_FILE)
 
-          # Check if triggered by tag
-          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             NEW_VERSION="${GITHUB_REF#refs/tags/v}"
-          else
-            # Strip "-pre" from stored version if it exists
-            NEW_VERSION="${CURRENT_VERSION%-pre}"
+          elif [[ "$GITHUB_REF" == "refs/tags/release" ]]; then
+            
+            if [[ "$CURRENT_VERSION" != *-pre ]]; then# If we release what was a stable release, than we increment the patch
+              IFS='.' read -r major minor patch <<< "$CURRENT_VERSION"
+              PATCH=$((patch + 1))
+              NEW_VERSION="${major}.${minor}.${PATCH}"
+            else
+              # If we release a pre-release, than the it becomes a stable release so remove -pre suffix 
+              NEW_VERSION="${CURRENT_VERSION%-pre}"
+            fi
           fi
-          # Update VERSION file to reflect new stable release
-          echo "$NEW_VERSION" > $VERSION_FILE
-
-          # Store new version as environment var to use later
-          echo "version=$NEW_VERSION" >> $GITHUB_ENV
-
-      - name: Build distribution
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+  # Exchangeable, this is specific to lib-version
+  build-and-release:
+    needs: versioning
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set Correct Version In Build Files
         run: |
-          python -m build
-      
-      - name: Upload to GitHub Release
+          VERSION_FILE="VERSION"
+          echo "${{ needs.versioning.outputs.version }}" > "$VERSION_FILE"
+          echo $(cat "$VERSION_FILE")
+          echo "Building the python package and then releasing it"
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install build tools
+        run: python -m pip install --upgrade pip build
+
+      - name: Build package
+        run: python -m build
+
+      - name: Upload GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          name: Release v${{ env.version }}
-          tag_name: v${{ env.version }}
+          name: Release v${{ needs.versioning.outputs.version }}
+          tag_name: v${{ needs.versioning.outputs.version }}
           files: |
             dist/*.tar.gz
             dist/*.whl
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
-
-      - name: Update main to prerelease with incremented patch
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  
+  tag-and-bump:
+    needs: [versioning, build-and-release]
+    runs-on: ubuntu-latest
+    env:
+      VERSION_FILE: "src/lib_version/VERSION"
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Commit New Version with Stable Tag
         run: |
-          IFS='.' read -r major minor patch <<< "${{ env.version }}"
-          PATCH=$((patch + 1))
-          NEW_VERSION="v${major}.${minor}.${PATCH}-pre"
-
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add src/lib_version/VERSION
-          git commit -m "ci: bump version to $NEW_VERSION"
-          git tag "$NEW_VERSION"
-          git push origin "$NEW_VERSION"
+
+          # Change version file
+          echo ${{ needs.versioning.outputs.version }} > $VERSION_FILE
+
+          # Remove releas tag if necessary
+          if [[ "$GITHUB_REF" == "refs/tags/release" ]]; then
+            git tag -d release
+            git push origin :release
+          fi
+
+          # Commit change
+          git add $VERSION_FILE
+          git commit -m "New stable version: ${{ needs.versioning.outputs.version }}"
+          git tag v${{ needs.versioning.outputs.version }}
+          
+          # Push commit and tag to remote
+          git push
+          git push origin v${{ needs.versioning.outputs.version }}
+        
+      - name: Bump to New Pre-Release
+        run: |
+          # Bump patch
+          IFS='.' read -r major minor patch <<< "${{ needs.versioning.outputs.version }}"
+          PATCH=$((patch + 1))
+          echo $PATCH
+          
+          # Determine new version
+          NEW_VERSION="${major}.${minor}.${PATCH}-pre"
+          
+          # Change version file
+          echo $NEW_VERSION > $VERSION_FILE
+
+          # Commit change
+          git add $VERSION_FILE
+          git commit -m "New pre-release version: v$NEW_VERSION"
+          git tag v$NEW_VERSION
+
+          # Push commit and tag
+          git push
+          git push origin v$NEW_VERSION
+    
