@@ -106,38 +106,6 @@ jobs:
 
       - name: Bump to New Pre-Release
         run: |
-          # Bump patch
-          IFS='.' read -r major minor patch <<< "${{ needs.versioning.outputs.version }}"
-          PATCH=$((patch + 1))
-          echo $PATCH
-          
-          # Determine new version
-          NEW_VERSION="${major}.${minor}.${PATCH}-pre"
-
-          
-          # Change version file
-          echo $NEW_VERSION > $VERSION_FILE
-
-          # Commit change
-          git add $VERSION_FILE
-          git commit -m "New pre-release version: v$NEW_VERSION"
-          git tag v$NEW_VERSION
-
-          # Push commit and tag
-          git push origin HEAD:main
-          git push origin v$NEW_VERSION
-  
-  tag-and-bump:
-    needs: [versioning, build-and-release]
-    runs-on: ubuntu-latest
-    env:
-      VERSION_FILE: "src/lib_version/VERSION"
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        
-      - name: Bump to New Pre-Release
-        run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git checkout -b main
