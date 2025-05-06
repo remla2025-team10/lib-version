@@ -78,9 +78,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set Correct Version In Build Files
-        run: |
-          echo "${{ needs.versioning.outputs.version }}" > "$VERSION_FILE"
 
       - name: Setup Python
         uses: actions/setup-python@v4
@@ -103,11 +100,6 @@ jobs:
             dist/*.whl
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          
-      - name: Rebase on latest main
-        run: |
-          git fetch origin
-          git rebase origin/main
         
       - name: Bump to New Pre-Release
         run: |
