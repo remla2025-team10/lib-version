@@ -103,7 +103,12 @@ jobs:
             dist/*.whl
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
+          
+      - name: Rebase on latest main
+        run: |
+          git fetch origin
+          git rebase origin/main
+        
       - name: Bump to New Pre-Release
         run: |
           git config user.name "github-actions[bot]"
@@ -121,6 +126,8 @@ jobs:
           
           # Change version file
           echo $NEW_VERSION > $VERSION_FILE
+
+          git pull
 
           # Commit change
           git add $VERSION_FILE
