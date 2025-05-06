@@ -50,7 +50,7 @@ jobs:
           if [[ "$GITHUB_REF" == "refs/tags/release" ]]; then
             git tag -d release
             git push origin :release
-          elif [[ "$GITHUB_REF" == "refs/tags/v*" ]]; then
+          else
             git tag -d v${{ steps.set.outputs.version }}
             git push origin :v${{ steps.set.outputs.version }}
           fi
