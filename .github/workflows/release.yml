@@ -115,6 +115,10 @@ jobs:
         
       - name: Bump to New Pre-Release
         run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b main
+          
           # Bump patch
           IFS='.' read -r major minor patch <<< "${{ needs.versioning.outputs.version }}"
           PATCH=$((patch + 1))
