@@ -10,7 +10,7 @@ jobs:
   versioning: # Determine the new version
     runs-on: ubuntu-latest
     env:
-      VERSION_FILE: "src/lib-version/VERSION"
+      VERSION_FILE: "src/lib_version/VERSION"
     outputs:
       version: ${{ steps.set.outputs.version }}
     steps:
@@ -42,7 +42,7 @@ jobs:
   build-and-release:
     needs: versioning
     env:
-      VERSION_FILE: "src/lib-version/VERSION"
+      VERSION_FILE: "src/lib_version/VERSION"
     runs-on: ubuntu-latest
     steps:
       - name: Set Correct Version In Build Files
