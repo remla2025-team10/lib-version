@@ -1,83 +1,33 @@
-name: Release Workflow
+name: Code Quality & Tests
 
 on:
   push:
-    tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+'
-      - 'release'
+    branches: ['*']
+    tags: ['*']
+  pull_request:
+    branches: ['main']
+
+permissions:
+  contents: write
 
 jobs:
   versioning: # Determine the new version
+    if: github.ref == 'refs/tags/release' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     env:
       VERSION_FILE: "src/lib_version/VERSION"
     outputs:
-      version: ${{ steps.set.outputs.version }}
+      version: ${{ steps.version.outputs.version }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Determine version
-        id: set
-        run: |
-          CURRENT_VERSION=$(cat $VERSION_FILE)
-
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            NEW_VERSION="${GITHUB_REF#refs/tags/v}"
-          elif [[ "$GITHUB_REF" == "refs/tags/release" ]]; then
-            
-            if [[ "$CURRENT_VERSION" != *-pre ]]; then # If we release what was a stable release, than we increment the patch
-              IFS='.' read -r major minor patch <<< "$CURRENT_VERSION"
-              PATCH=$((patch + 1))
-              NEW_VERSION="${major}.${minor}.${PATCH}"
-            else
-              # If we release a pre-release, than the it becomes a stable release so remove -pre suffix 
-              NEW_VERSION="${CURRENT_VERSION%-pre}"
-            fi
-          # Should automatically create a new pre-patch here, because push will trigger it.
-          fi
-
-          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
-
-      # Must be run before the release action because 
-      - name: Create Commit for stable version
+      - name: Set up Git
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git checkout -b main
-
-          # Remove the pushed tags
-          if [[ "$GITHUB_REF" == "refs/tags/release" ]]; then
-            git tag -d release
-            git push origin :release
-          else
-            git tag -d v${{ steps.set.outputs.version }}
-            git push origin :v${{ steps.set.outputs.version }}
-          fi
-          
-          # Change version file
-          echo ${{ steps.set.outputs.version }} > $VERSION_FILE
-
-          # Commit the change
-          # Commit change
-          git add $VERSION_FILE
-          git commit -m "New stable version: v${{ steps.set.outputs.version }}"
-          git tag v${{ steps.set.outputs.version }}
-          
-          # Push commit and tag to remote
-          git push origin HEAD:main
-          git push origin v${{ steps.set.outputs.version }}
-
-  # Exchangeable, this is specific to lib-version
-  build-and-release:
-    needs: versioning
-    env:
-      VERSION_FILE: "src/lib_version/VERSION"
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
 
       - name: Setup Python
         uses: actions/setup-python@v4
@@ -90,40 +40,75 @@ jobs:
       - name: Build package
         run: python -m build
 
-      - name: Upload GitHub Release
-        uses: softprops/action-gh-release@v1
-        with:
-          name: Release v${{ needs.versioning.outputs.version }}
-          tag_name: v${{ needs.versioning.outputs.version }}
-          files: |
-            dist/*.tar.gz
-            dist/*.whl
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        
-      - name: Bump to New Pre-Release
+      - name: Determine new stable version
+        id: version
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            # Use the tag directly
+            NEW_VERSION="${GITHUB_REF#refs/tags/v}"
+            echo "Using pushed version tag: $NEW_VERSION"
+          else
+            # Bump patch version from latest stable vX.Y.Z tag
+            LATEST_TAG=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1)
+            if [[ -z "$LATEST_TAG" ]]; then
+              echo "No existing version tag found, defaulting to v0.0.1"
+              NEW_VERSION="v0.0.1"
+            else
+              IFS='.' read -r MAJOR MINOR PATCH <<< "${LATEST_TAG#v}"
+              PATCH=$((PATCH + 1))
+              NEW_VERSION="$MAJOR.$MINOR.$PATCH"
+              echo "Bumped version: $LATEST_TAG -> $NEW_VERSION"
+            fi
+          fi
+
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
+
+       # Remove the pushed tags
+      - name: Remove tags
+        run: |
           git checkout -b main
+          if [[ "$GITHUB_REF" == "refs/tags/release" ]]; then
+            git tag -d release
+            git push origin :release
+          else
+            git tag -d v${{ steps.version.outputs.version }}
+            git push origin :v${{ steps.version.outputs.version }}
+          fi
+
+      - name: Update version file
+        run: |
+          echo ${{ steps.version.outputs.version }} > $VERSION_FILE
+      
+      - name: Commit updated version file
+        run: |
+          git add $VERSION_FILE
+          git commit -m "chore: release version v${{ steps.version.outputs.version }}"
+          git push origin main
+          git tag v${{ steps.version.outputs.version }}
+          git push origin v${{ steps.version.outputs.version }}
+
+      - name: Create GitHub release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: v${{ steps.version.outputs.version }}
+          name: Release v${{ steps.version.outputs.version }}
+          artifacts: "dist/*.tar.gz, dist/*.whl"
+          allowUpdates: true
+
+      - name: Bump patch and add pre tag
+        id: prerelease
+        run: |
+          IFS='.' read -r MAJOR MINOR PATCH <<< "${{ steps.version.outputs.version }}"
+          PATCH=$((PATCH + 1))
+          PRE_VERSION="v$MAJOR.$MINOR.$PATCH-pre"
+
+          git checkout main
           git pull origin main
 
-          # Bump patch
-          IFS='.' read -r major minor patch <<< "${{ needs.versioning.outputs.version }}"
-          PATCH=$((patch + 1))
-          echo $PATCH
-          
-          # Determine new version
-          NEW_VERSION="${major}.${minor}.${PATCH}-pre"
-          
-          # Change version file
-          echo $NEW_VERSION > $VERSION_FILE
+          echo "Creating empty commit for $PRE_VERSION"
+          git commit --allow-empty -m "chore: bump version to $PRE_VERSION"
+          git tag "$PRE_VERSION"
 
-          # Commit change
-          git add $VERSION_FILE
-          git commit -m "New pre-release version: v$NEW_VERSION"
-          git tag v$NEW_VERSION
-
-          # Push commit and tag
-          git push origin HEAD:main
-          git push origin v$NEW_VERSION
+          git push origin main
+          git push origin "$PRE_VERSION"
