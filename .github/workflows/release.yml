@@ -76,6 +76,7 @@ jobs:
       
       - name: Commit updated version file
         run: |
+          git checkout main
           git add $VERSION_FILE
           git commit -m "chore: release version v${{ steps.version.outputs.version }} [skip ci]"
           git push origin main
